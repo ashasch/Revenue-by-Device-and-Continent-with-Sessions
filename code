@@ -1,0 +1,44 @@
+#| Continent | Revenue | Revenue from Mobile | Revenue from Desktop | % Revenue from Total | Account Count | Verified Account | Session Count |
+
+
+WITH revenue_data AS (
+    SELECT
+        sp.continent,
+        SUM(p.price) AS revenue,
+        SUM(CASE WHEN sp.device = 'mobile' THEN p.price ELSE 0 END) AS revenue_from_mobile,
+        SUM(CASE WHEN sp.device = 'desktop' THEN p.price ELSE 0 END) AS revenue_from_desktop
+    FROM `DA.order` o
+    JOIN `DA.product` p ON o.item_id = p.item_id
+    JOIN `DA.session_params` sp ON o.ga_session_id = sp.ga_session_id
+    GROUP BY sp.continent
+),
+account_data AS (
+    SELECT
+        sp.continent,
+        COUNT(DISTINCT ac.id) AS account_cnt,
+        COUNT(DISTINCT CASE WHEN ac.is_verified = 1 THEN ac.id END) AS verified_account_cnt
+    FROM `DA.account` ac
+    JOIN `DA.account_session` acs ON ac.id = acs.account_id
+    JOIN `DA.session_params` sp ON acs.ga_session_id = sp.ga_session_id
+    GROUP BY sp.continent
+),
+session_data AS (
+    SELECT
+        continent,
+        COUNT(DISTINCT ga_session_id) AS session_cnt
+    FROM `DA.session_params`
+    GROUP BY continent
+)
+SELECT  
+    rd.continent,
+    rd.revenue,
+    rd.revenue_from_mobile,
+    rd.revenue_from_desktop,
+    (rd.revenue / SUM(rd.revenue) OVER ()) * 100 AS percent_revenue_from_total,
+    ad.account_cnt AS account_cnt,
+    ad.verified_account_cnt AS verified_account_cnt,
+    sd.session_cnt AS session_cnt
+FROM revenue_data rd
+LEFT JOIN account_data ad ON rd.continent = ad.continent
+LEFT JOIN session_data sd ON rd.continent = sd.continent
+ORDER BY rd.continent;    
